@@ -4,6 +4,7 @@ import time
 import threading
 import random
 import math
+import os
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
@@ -358,4 +359,5 @@ def game_loop():
     socketio.start_background_task(game_loop)
 
 if __name__ == '__main__':
-    socketio.run(app, debug=True, host='0.0.0.0', port=5001) 
+    port = int(os.environ.get("PORT", 5001))
+    socketio.run(app, debug=False, host='0.0.0.0', port=port, allow_unsafe_werkzeug=True) 
