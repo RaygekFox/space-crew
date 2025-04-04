@@ -1,0 +1,581 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Космічна Місія</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.1/socket.io.js"></script>
+</head>
+<body>
+    <!-- SVG Gradient for gauges -->
+    <svg width="0" height="0" version="1.1" class="gradient-mask" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+            <linearGradient id="gradientGauge">
+                <stop class="color-red" offset="0%" />
+                <stop class="color-yellow" offset="17%" />
+                <stop class="color-green" offset="40%" />
+                <stop class="color-yellow" offset="87%" />
+                <stop class="color-red" offset="100%" />
+            </linearGradient>
+        </defs>
+    </svg>
+    
+    <div class="container">
+        <div id="player-count">
+            Підключених гравців: <span id="count">0</span>
+        </div>
+        <div id="game-status" style="display: none;">
+            Статус гри: <span id="status">Очікування запуску</span>
+        </div>
+
+        <!-- Game parameters display -->
+        <div id="game-state-container">
+            
+            <!-- Rocket Visualization Screens -->
+            <div id="rocket-visualization">
+                <div class="visualization-screens">
+                    <!-- First screen - Rocket and fire -->
+                    <div id="rocket-screen" class="visualization-screen">
+                        <!-- Rocket and fire container with proper positioning -->
+                        <div id="rocket-container">
+                            <img id="rocket-image" src="{{ url_for('static', filename='images/rocket.png') }}" alt="Rocket">
+                            <img id="left-engine-fire" class="engine-fire" src="{{ url_for('static', filename='images/fire.png') }}" alt="Left Engine Fire">
+                            <img id="right-engine-fire" class="engine-fire" src="{{ url_for('static', filename='images/fire.png') }}" alt="Right Engine Fire">
+                        </div>
+                    </div>
+                    
+                    <!-- Second screen - Rocket position relative to planet -->
+                    <div id="position-screen" class="visualization-screen">
+                        <!-- Rocket triangle and planet visualization -->
+                        <div id="position-container">
+                            <div id="rocket-triangle"></div>
+                            <div id="planet"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Block 1: Navigation Parameters -->
+            <h3 class="block-title">Навігація</h3>
+            <div class="parameter-block">
+                <div class="parameter">
+                    <label>Висота:</label>
+                    <div class="gauge-container">
+                        <div class="gauge-backdrop"></div>
+                        <div id="h-gauge" class="gauge-fill"></div>
+                        <div id="h-needle" class="gauge-needle"></div>
+                        <div class="gauge-center">
+                            <div class="gauge-value">0</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="parameter">
+                    <label>Вертикальна швидкість:</label>
+                    <span id="v_y">0</span> м/с
+                </div>
+                <div class="parameter">
+                    <label>Горизонтальна швидкість:</label>
+                    <span id="v_x">0</span> м/с
+                </div>
+                <div class="parameter">
+                    <label>Кут:</label>
+                    <div class="gauge-container">
+                        <div class="gauge-backdrop"></div>
+                        <div id="alpha-gauge" class="gauge-fill"></div>
+                        <div id="alpha-needle" class="gauge-needle"></div>
+                        <div class="gauge-center">
+                            <div class="gauge-value">0°</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="parameter">
+                    <label>Сумарне прискорення:</label>
+                    <div class="gauge-container">
+                        <div class="gauge-backdrop"></div>
+                        <div id="v_y_change-gauge" class="gauge-fill"></div>
+                        <div id="v_y_change-needle" class="gauge-needle"></div>
+                        <div class="gauge-center">
+                            <div class="gauge-value">0</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="parameter">
+                    <label>Гравітаційне прискорення:</label>
+                    <div class="gauge-container">
+                        <div class="gauge-backdrop"></div>
+                        <div id="a_grav-gauge" class="gauge-fill"></div>
+                        <div id="a_grav-needle" class="gauge-needle"></div>
+                        <div class="gauge-center">
+                            <div class="gauge-value">0</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="parameter">
+                    <label>Орбітальне прискорення:</label>
+                    <div class="gauge-container">
+                        <div class="gauge-backdrop"></div>
+                        <div id="a_orbit-gauge" class="gauge-fill"></div>
+                        <div id="a_orbit-needle" class="gauge-needle"></div>
+                        <div class="gauge-center">
+                            <div class="gauge-value">0</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Block 2: Propulsion Parameters -->
+            <h3 class="block-title">Силова установка</h3>
+            <div class="parameter-block">
+                <div class="parameter">
+                    <label>Паливо:</label>
+                    <div class="gauge-container">
+                        <div class="gauge-backdrop"></div>
+                        <div id="f-gauge" class="gauge-fill"></div>
+                        <div id="f-needle" class="gauge-needle"></div>
+                        <div class="gauge-center">
+                            <div class="gauge-value">1000</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="parameter">
+                    <label>Стадії ракети:</label>
+                    <div class="gauge-container">
+                        <div class="gauge-backdrop"></div>
+                        <div id="ns-gauge" class="gauge-fill"></div>
+                        <div id="ns-needle" class="gauge-needle"></div>
+                        <div class="gauge-center">
+                            <div class="gauge-value">5</div>
+                        </div>
+                    </div>
+                    <div class="parameter-controls">
+                        <button id="detach-stage" class="control-button warn">Відʼєднати стадію</button>
+                    </div>
+                </div>
+                <div class="parameter">
+                    <label>Лівий двигун:</label>
+                    <div class="gauge-container">
+                        <div class="gauge-backdrop"></div>
+                        <div id="e_l-gauge" class="gauge-fill"></div>
+                        <div id="e_l-needle" class="gauge-needle"></div>
+                        <div class="gauge-center">
+                            <div class="gauge-value">0</div>
+                        </div>
+                    </div>
+                    <div class="parameter-controls">
+                        <button id="increase-left-engine" class="control-button">+</button>
+                        <button id="decrease-left-engine" class="control-button">−</button>
+                    </div>
+                </div>
+                <div class="parameter">
+                    <label>Правий двигун:</label>
+                    <div class="gauge-container">
+                        <div class="gauge-backdrop"></div>
+                        <div id="e_r-gauge" class="gauge-fill"></div>
+                        <div id="e_r-needle" class="gauge-needle"></div>
+                        <div class="gauge-center">
+                            <div class="gauge-value">0</div>
+                        </div>
+                    </div>
+                    <div class="parameter-controls">
+                        <button id="increase-right-engine" class="control-button">+</button>
+                        <button id="decrease-right-engine" class="control-button">−</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Block 3: Thermal & Pressure Parameters -->
+            <h3 class="block-title">Температура і тиск
+                <div class="switch">
+                  <input id="toggle-temperature" type="checkbox" />
+                  <label class="toggle" for="toggle-temperature">
+                    <i></i>
+                  </label>
+                </div>
+            </h3>
+            <div class="parameter-block">
+                <div class="parameter">
+                    <label>Температура корпусу:</label>
+                    <div class="gauge-container">
+                        <div class="gauge-backdrop"></div>
+                        <div id="t-gauge" class="gauge-fill"></div>
+                        <div id="t-needle" class="gauge-needle"></div>
+                        <div class="gauge-center">
+                            <div class="gauge-value">0</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="parameter">
+                    <label>Температура лівого двигуна:</label>
+                    <div class="gauge-container">
+                        <div class="gauge-backdrop"></div>
+                        <div id="t_l-gauge" class="gauge-fill"></div>
+                        <div id="t_l-needle" class="gauge-needle"></div>
+                        <div class="gauge-center">
+                            <div class="gauge-value">0</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="parameter">
+                    <label>Температура правого двигуна:</label>
+                    <div class="gauge-container">
+                        <div class="gauge-backdrop"></div>
+                        <div id="t_r-gauge" class="gauge-fill"></div>
+                        <div id="t_r-needle" class="gauge-needle"></div>
+                        <div class="gauge-center">
+                            <div class="gauge-value">0</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="parameter">
+                    <label>Температура батареї:</label>
+                    <div class="gauge-container">
+                        <div class="gauge-backdrop"></div>
+                        <div id="t_c-gauge" class="gauge-fill"></div>
+                        <div id="t_c-needle" class="gauge-needle"></div>
+                        <div class="gauge-center">
+                            <div class="gauge-value">0</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="parameter">
+                    <label>Тиск:</label>
+                    <div class="gauge-container">
+                        <div class="gauge-backdrop"></div>
+                        <div id="p-gauge" class="gauge-fill"></div>
+                        <div id="p-needle" class="gauge-needle"></div>
+                        <div class="gauge-center">
+                            <div class="gauge-value">1</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Block 4: Power Parameters -->
+            <h3 class="block-title">Електроживлення
+                <div class="switch">
+                  <input id="toggle-electricity" type="checkbox" />
+                  <label class="toggle" for="toggle-electricity">
+                    <i></i>
+                  </label>
+                </div>
+            </h3>
+            <div class="parameter-block">
+                <div class="parameter">
+                    <label>Заряд батареї:</label>
+                    <div class="gauge-container">
+                        <div class="gauge-backdrop"></div>
+                        <div id="c-gauge" class="gauge-fill"></div>
+                        <div id="c-needle" class="gauge-needle"></div>
+                        <div class="gauge-center">
+                            <div class="gauge-value">1000</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="parameter">
+                    <label>Сонячні панелі:</label>
+                    <span id="sp">Закриті</span>
+                    <div class="parameter-controls">
+                        <button id="toggle-solar-panels" class="control-button">Відкрити/закрити</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Block 5: Communication Parameters -->
+            <h3 class="block-title">Зв'язок
+                <div class="switch">
+                  <input id="toggle-connection" type="checkbox" />
+                  <label class="toggle" for="toggle-connection">
+                    <i></i>
+                  </label>
+                </div>
+            </h3>
+            <div class="parameter-block">
+                <div class="parameter">
+                    <label>Рівень зв'язку:</label>
+                    <div class="gauge-container">
+                        <div class="gauge-backdrop"></div>
+                        <div id="ls-gauge" class="gauge-fill"></div>
+                        <div id="ls-needle" class="gauge-needle"></div>
+                        <div class="gauge-center">
+                            <div class="gauge-value">1</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="parameter">
+                    <label>Частота вхідного сигналу:</label>
+                    <span id="mu_in">100</span>
+                </div>
+                <div class="parameter">
+                    <label>Частота приймача:</label>
+                    <span id="mu_r">100</span>
+                    <div class="parameter-controls">
+                        <button id="increase-receiver-freq" class="control-button">+</button>
+                        <button id="decrease-receiver-freq" class="control-button">−</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Game over screen -->
+        <div id="game-over-screen" class="hidden">
+            <h2>Кінець гри!</h2>
+            <p id="game-over-message">Ракета втрачена.</p>
+            <button id="restart-game" class="restart-button">Перезапустити місію</button>
+        </div>
+        
+        <!-- Hidden elements for behind-the-scenes functionality -->
+        <div class="hidden-controls">
+            <button id="toggle-counting" class="hidden">Пауза</button>
+        </div>
+    </div>
+
+    <script>
+        const socket = io();
+        let countingEnabled = true;
+        
+        // Toggle counting button (hidden functionality preserved)
+        const toggleButton = document.getElementById('toggle-counting');
+        toggleButton.addEventListener('click', function() {
+            socket.emit('toggle_counting');
+        });
+        
+        // Restart button
+        const restartButton = document.getElementById('restart-game');
+        restartButton.addEventListener('click', function() {
+            socket.emit('reset_game');
+            document.getElementById('game-over-screen').classList.add('hidden');
+            document.getElementById('status').textContent = 'Гра запущена';
+        });
+        
+        // Control buttons event listeners
+        document.getElementById('increase-left-engine').addEventListener('click', function() {
+            socket.emit('control_action', { action: 'increase_left_engine' });
+        });
+        
+        document.getElementById('decrease-left-engine').addEventListener('click', function() {
+            socket.emit('control_action', { action: 'decrease_left_engine' });
+        });
+        
+        document.getElementById('increase-right-engine').addEventListener('click', function() {
+            socket.emit('control_action', { action: 'increase_right_engine' });
+        });
+        
+        document.getElementById('decrease-right-engine').addEventListener('click', function() {
+            socket.emit('control_action', { action: 'decrease_right_engine' });
+        });
+        
+        document.getElementById('toggle-solar-panels').addEventListener('click', function() {
+            socket.emit('control_action', { action: 'toggle_solar_panels' });
+        });
+        
+        document.getElementById('increase-receiver-freq').addEventListener('click', function() {
+            socket.emit('control_action', { action: 'increase_receiver_freq' });
+        });
+        
+        document.getElementById('decrease-receiver-freq').addEventListener('click', function() {
+            socket.emit('control_action', { action: 'decrease_receiver_freq' });
+        });
+        
+        document.getElementById('detach-stage').addEventListener('click', function() {
+            socket.emit('control_action', { action: 'detach_stage' });
+        });
+        
+        socket.on('connect', () => {
+            console.log('Connected to server');
+        });
+
+        socket.on('client_count', (data) => {
+            document.getElementById('count').textContent = data.count;
+        });
+        
+        socket.on('tick_update', (data) => {
+            // We don't update the ticks text content anymore but maintain counting functionality
+            countingEnabled = data.counting_enabled;
+            
+            // Update game status based on ticks
+            if (data.ticks > 0) {
+                document.getElementById('status').textContent = 'Гра запущена';
+            }
+        });
+        
+        socket.on('counting_toggled', (data) => {
+            countingEnabled = data.counting_enabled;
+        });
+        
+        socket.on('game_state_update', (data) => {
+            // Update values for parameters without gauges
+            document.getElementById('v_y').textContent = data.v_y.toFixed(2);
+            document.getElementById('v_x').textContent = data.v_x.toFixed(2);
+            document.getElementById('sp').textContent = data.sp === 0 ? 'Закриті' : 'Відкриті';
+            document.getElementById('mu_in').textContent = data.mu_in.toFixed(0);
+            document.getElementById('mu_r').textContent = data.mu_r.toFixed(0);
+            
+            // Update gauges
+            updateGauge('h-gauge', data.h, 100000); // Max height for display
+            updateGauge('p-gauge', data.p, 1);
+            updateGauge('alpha-gauge', data.alpha, 360);
+            updateGauge('f-gauge', data.f, 1000);
+            updateGauge('ns-gauge', data.ns, 5);
+            updateGauge('e_l-gauge', data.e_l, 5);
+            updateGauge('e_r-gauge', data.e_r, 5);
+            updateGauge('t-gauge', data.t, 1000, true);
+            updateGauge('t_l-gauge', data.t_l, 1000, true);
+            updateGauge('t_r-gauge', data.t_r, 1000, true);
+            updateGauge('c-gauge', data.c, 1000);
+            updateGauge('t_c-gauge', data.t_c, 1000, true);
+            updateGauge('ls-gauge', data.ls, 1);
+            updateGauge('v_y_change-gauge', data.v_y_change*10, 200);
+            updateGauge('a_grav-gauge', -data.a_grav, 10);
+            updateGauge('a_orbit-gauge', data.a_orbit, 10);
+            
+            // Update rocket rotation and engine fire
+            const rocketContainer = document.getElementById('rocket-container');
+            const leftEngineFire = document.getElementById('left-engine-fire');
+            const rightEngineFire = document.getElementById('right-engine-fire');
+            
+            // Rotate rocket according to alpha angle
+            rocketContainer.style.transform = `scale(0.4) rotate(${data.alpha}deg)`;
+            
+            // Show/hide fire based on engine power
+            leftEngineFire.style.display = data.e_l > 0 ? 'block' : 'none';
+            rightEngineFire.style.display = data.e_r > 0 ? 'block' : 'none';
+            
+            // Update position screen with triangle (rocket representation)
+            const positionContainer = document.getElementById('position-container');
+            const rocketTriangle = document.getElementById('rocket-triangle');
+            const planet = document.getElementById('planet');
+            
+            // Always show position screen content (removed h>0 condition)
+            positionContainer.style.display = 'block';
+            
+            // Rotate triangle according to alpha angle
+            rocketTriangle.style.transform = `translate(-50%, -50%) rotate(${data.alpha}deg)`;
+            
+            // Calculate planet radius based on height: R = (6400000/h)*100px
+            // Adjust the scale to ensure planet is visible even at high altitudes
+            const minPlanetRadius = 50; // Minimum radius for visibility 
+            const planetRadius = data.h > 0 ? (6400000 / data.h) * 100 : 6400000; // Use 6400000 as default when h=0
+            
+            console.log("Height:", data.h, "Planet radius:", planetRadius);
+            
+            // Position the planet below the triangle: center at R+100px below the triangle
+            planet.style.display = 'block';
+            planet.style.width = `${planetRadius * 2}px`;
+            planet.style.height = `${planetRadius * 2}px`;
+            
+            // Calculate a reasonable position for the planet to be visible
+            const distanceFromRocket = Math.min(data.h, 100);
+            
+            // Set position of the planet (centered horizontally, positioned distanceFromRocket below rocket)
+            planet.style.left = `50%`;
+            planet.style.top = `50%`;
+            planet.style.transform = `translate(-50%, ${distanceFromRocket}px)`;
+            
+            // Update button states based on conditions
+            document.getElementById('increase-left-engine').disabled = data.e_l >= 5 || data.f <= 0;
+            document.getElementById('increase-right-engine').disabled = data.e_r >= 5 || data.f <= 0;
+            document.getElementById('decrease-left-engine').disabled = data.e_l <= 0;
+            document.getElementById('decrease-right-engine').disabled = data.e_r <= 0;
+            document.getElementById('detach-stage').disabled = data.ns <= 0;
+            
+            // Check for game over
+            if (data.game_over) {
+                let message = '';
+                if (data.h === 0 && data.v_y < 0) {
+                    message = 'Аварійна посадка - недостатня швидкість!';
+                } else if (data.t >= 1000) {
+                    message = 'Перегрів корпусу ракети!';
+                } else if (data.t_l >= 1000) {
+                    message = 'Перегрів лівого двигуна!';
+                } else if (data.t_r >= 1000) {
+                    message = 'Перегрів правого двигуна!';
+                } else if (data.t_c >= 1000) {
+                    message = 'Перегрів батареї!';
+                } else if (data.ls < 0.01) {
+                    message = 'Втрачено звʼязок з Землею!';
+                } else {
+                    message = 'Місія провалилася!';
+                }
+                
+                document.getElementById('game-over-message').textContent = message;
+                document.getElementById('game-over-screen').classList.remove('hidden');
+                document.getElementById('status').textContent = 'Гра завершена';
+            }
+        });
+        
+        socket.on('game_reset', () => {
+            document.getElementById('game-over-screen').classList.add('hidden');
+            document.getElementById('status').textContent = 'Гра запущена';
+        });
+        
+        // Function to update gauge elements
+        function updateGauge(id, value, maxValue, isTemperature = false) {
+            const gauge = document.getElementById(id);
+            const needle = document.getElementById(id.replace('gauge', 'needle'));
+            const gaugeContainer = gauge.parentElement;
+            const gaugeValue = gaugeContainer.querySelector('.gauge-value');
+            
+            // Calculate percentage for circular gauge (0-100%)
+            const percentage = Math.min(1, value / maxValue) * 100;
+            
+            // Update gauge fill
+            gauge.style.background = `conic-gradient(var(--color-blue-light) ${percentage}%, transparent ${percentage}%)`;
+            
+            // Update value display
+            gaugeValue.textContent = Number(value).toFixed(isTemperature ? 0 : value < 10 ? 2 : 0);
+            
+            // Calculate rotation for gauge needle
+            const rotation = (percentage / 100) * 360;
+            needle.style.transform = `rotate(${rotation}deg)`;
+            
+            // Update gauge status class (for color)
+            gaugeContainer.classList.remove('gauge-normal', 'gauge-warning', 'gauge-critical');
+            
+            if (percentage > 80) {
+                gaugeContainer.classList.add('gauge-critical');
+            } else if (percentage > 60) {
+                gaugeContainer.classList.add('gauge-warning');
+            } else {
+                gaugeContainer.classList.add('gauge-normal');
+            }
+        }
+        
+        // Set up difficulty control switches
+        const temperatureSwitch = document.getElementById('toggle-temperature');
+        const electricitySwitch = document.getElementById('toggle-electricity');
+        const connectionSwitch = document.getElementById('toggle-connection');
+        
+        // Initialize difficulty preferences
+        let difficultyPreferences = {
+            temperature: false,
+            electricity: false,
+            connection: false
+        };
+        
+        // Event listeners for difficulty switches
+        temperatureSwitch.addEventListener('change', function() {
+            difficultyPreferences.temperature = this.checked;
+            socket.emit('update_difficulty', difficultyPreferences);
+        });
+        
+        electricitySwitch.addEventListener('change', function() {
+            difficultyPreferences.electricity = this.checked;
+            socket.emit('update_difficulty', difficultyPreferences);
+        });
+        
+        connectionSwitch.addEventListener('change', function() {
+            difficultyPreferences.connection = this.checked;
+            socket.emit('update_difficulty', difficultyPreferences);
+        });
+        
+        // Receive initial difficulty settings on connection
+        socket.on('difficulty_settings', (data) => {
+            difficultyPreferences = data;
+            temperatureSwitch.checked = difficultyPreferences.temperature;
+            electricitySwitch.checked = difficultyPreferences.electricity;
+            connectionSwitch.checked = difficultyPreferences.connection;
+        });
+    </script>
+</body>
+</html> 
