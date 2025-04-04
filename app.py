@@ -231,7 +231,7 @@ def update_game_state():
     
     # Hack: Prevent vertical speed from decreasing when at ground level (h=0)
     a_engine = 5 * total_engine_power * math.cos(alpha_rad)
-    a_grav = 10* (6400000/(6400000+game_state['h']))
+    a_grav = 10 * (6400000/(6400000+game_state['h']))**2
     a_orbit = game_state['v_x']**2/(6400000+game_state['h'])
     v_y_change = ((a_engine - a_grav + a_orbit) * dt)/10
     
